@@ -25,7 +25,37 @@ async function handleGetAnalytics(req, res) {
     analytics: result.History,
   });
 }
+
+
+// Get all shortened URLs
+async function handleGetAllURLs(req, res) {
+  try {
+    const urls = await URL.find().sort({ createdAt: -1 });
+    return res.status(200).json(urls);
+  } catch (error) {
+    console.error("Error fetching URLs:", error);
+    return res.status(500).json({ error: "Failed to fetch URLs" });
+  }
+}
+
+
+// Delete a shortened URL
+async function handleDeleteURL(req, res) {
+  try {
+    const { shortId } = req.params;
+    const deleteURL = await URL.findOneAndDelete({ shortId });
+    if (!deleteURL) {
+      return res.status(404).json({ error: "URL not found" });
+    }
+    return res.status(200).json({ message: "URL deleted successfully" });
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to delete URL" });
+  }
+}
+
 module.exports = {
   handleGenerateNewShortURL,
-  handleGetAnalytics
+  handleGetAnalytics,
+  handleGetAllURLs,
+  handleDeleteURL,
 };
