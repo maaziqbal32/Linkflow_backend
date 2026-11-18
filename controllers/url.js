@@ -17,15 +17,34 @@ async function handleGenerateNewShortURL(req, res) {
   return res.json({ id: shortID });
 }
 
+// get the analytics
 async function handleGetAnalytics(req, res) {
-  const shortId = req.params.shortId;
-  const result = await URL.findOne({ shortId });
-  return res.json({
-    totalClicks: result.visitHistory.length,
-    analytics: result.History,
-  });
-}
+  try {
+    const { shortId } = req.params;
 
+    const result = await URL.findOne({ shortId }).select(
+      "shortId redirectUrl visitHistory",
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: "URL not found" });
+    }
+
+    const analytics = result.visitHistory || [];
+
+    return res.status(200).json({
+      shortId: result.shortId,
+      redirectUrl: result.redirectUrl,
+      totalClicks: analytics.length,
+      analytics,
+    });
+  } catch (error) {
+    console.error("Analytics error:", error);
+    return res.status(500).json({
+      error: "Failed to fetch analytics",
+    });
+  }
+}
 
 // Get all shortened URLs
 async function handleGetAllURLs(req, res) {
@@ -37,7 +56,6 @@ async function handleGetAllURLs(req, res) {
     return res.status(500).json({ error: "Failed to fetch URLs" });
   }
 }
-
 
 // Delete a shortened URL
 async function handleDeleteURL(req, res) {
