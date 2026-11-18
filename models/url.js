@@ -7,11 +7,26 @@ const urlSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+
     redirectUrl: {
       type: String,
       required: true,
     },
-    visitHistory: [{ timestamp: { type: Number } }],
+
+    status: {
+      type: String,
+      enum: ["active", "inactive"],
+      default: "active",
+    },
+
+    visitHistory: [
+      {
+        timestamp: {
+          type: Number,
+          required: true,
+        },
+      },
+    ],
   },
   { timestamps: true },
 );

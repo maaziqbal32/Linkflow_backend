@@ -27,10 +27,13 @@ app.use("/url", urlRoute);
 // redirect the user to the original large url
 app.get("/:shortID", async (req, res) => {
   try {
-    const shortId = req.params.shortID;
+    const { shortID } = req.params;
 
     const entry = await URL.findOneAndUpdate(
-      { shortId },
+      {
+        shortId: shortID,
+        status: { $ne: "inactive" },
+      },
       {
         $push: {
           visitHistory: {
@@ -42,11 +45,17 @@ app.get("/:shortID", async (req, res) => {
     );
 
     if (!entry) {
-      return res.status(404).send("Short URL not found");
+      const exists = await URL.exists({ shortId: shortID });
+
+      return res
+        .status(exists ? 410 : 404)
+        .send(exists ? "This short URL is inactive" : "Short URL not found");
     }
 
     return res.redirect(entry.redirectUrl);
   } catch (error) {
+    console.error("Redirect error:", error);
+
     return res.status(500).send("Something went wrong");
   }
 });

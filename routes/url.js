@@ -1,17 +1,19 @@
 const express = require("express");
+
 const {
   handleGenerateNewShortURL,
   handleGetAnalytics,
   handleGetAllURLs,
   handleDeleteURL,
+  handleUpdateURLStatus,
 } = require("../controllers/url");
-const router = express();
 
-// post request to shorten the url
+const router = express.Router();
+
 router.post("/", handleGenerateNewShortURL);
 router.get("/", handleGetAllURLs);
-// get requesto to get the analytics of the shortid
 router.get("/analytics/:shortId", handleGetAnalytics);
+router.patch("/:shortId/status", handleUpdateURLStatus);
 router.delete("/:shortId", handleDeleteURL);
 
 module.exports = router;
