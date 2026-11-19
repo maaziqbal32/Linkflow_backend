@@ -1,38 +1,49 @@
+require("dotenv").config();
+
 const express = require("express");
+const cors = require("cors");
+const cookieParser = require("cookie-parser");
+
 const { connectToMongoDB } = require("./connection");
 const urlRoute = require("./routes/url");
-const cors = require("cors");
+const authRoute = require("./routes/auth");
+const URL = require("./models/url");
+
 const app = express();
 
-// url get kare gain model ma sa structure
-const URL = require("./models/url");
+const PORT = process.env.PORT || 8001;
+const MONGO_URI =
+  process.env.MONGO_URI || "mongodb://127.0.0.1:27017/short-url";
+
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET is missing from backend/.env");
+}
 
 app.use(
   cors({
     origin: "http://localhost:3000",
+    credentials: true,
   }),
 );
+
 app.use(express.json());
+app.use(cookieParser());
 
-const PORT = 8001;
-connectToMongoDB("mongodb://127.0.0.1:27017/short-url").then(() =>
-  console.log("Connection to mongoDB done."),
-);
-
-// adding the middleware that will allow the parsing the data
-app.use(express.json());
-
+app.use("/auth", authRoute);
 app.use("/url", urlRoute);
 
-// redirect the user to the original large url
+// Public short URL redirect
 app.get("/:shortID", async (req, res) => {
   try {
     const { shortID } = req.params;
 
+    // Browser ko cache karne se rokne ke liye
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+
     const entry = await URL.findOneAndUpdate(
       {
         shortId: shortID,
-        status: { $ne: "inactive" },
+        status: "active", // Seedha active check karna zyada clean hai
       },
       {
         $push: {
@@ -41,23 +52,35 @@ app.get("/:shortID", async (req, res) => {
           },
         },
       },
-      { new: true },
+      {   returnDocument: "after", },
     );
 
     if (!entry) {
       const exists = await URL.exists({ shortId: shortID });
 
+      // 410 ki jagah 403 use karein taake Chrome permanently cache na kare
       return res
-        .status(exists ? 410 : 404)
+        .status(exists ? 403 : 404)
         .send(exists ? "This short URL is inactive" : "Short URL not found");
     }
 
-    return res.redirect(entry.redirectUrl);
+    return res.redirect(302, entry.redirectUrl);
   } catch (error) {
     console.error("Redirect error:", error);
-
     return res.status(500).send("Something went wrong");
   }
 });
 
-app.listen(PORT, () => console.log(`server started at ${PORT}`));
+
+connectToMongoDB(MONGO_URI)
+  .then(() => {
+    console.log("Connection to MongoDB successful.");
+
+    app.listen(PORT, () => {
+      console.log(`Server started at port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error("MongoDB connection failed:", error);
+    process.exit(1);
+  });

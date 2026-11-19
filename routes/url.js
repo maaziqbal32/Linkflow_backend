@@ -1,4 +1,5 @@
 const express = require("express");
+const requireAuth = require("../middlewares/requireAuth");
 
 const {
   handleGenerateNewShortURL,
@@ -9,6 +10,8 @@ const {
 } = require("../controllers/url");
 
 const router = express.Router();
+
+router.use(requireAuth);
 
 router.post("/", handleGenerateNewShortURL);
 router.get("/", handleGetAllURLs);

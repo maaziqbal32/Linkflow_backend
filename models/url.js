@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const urlSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user",
+      required: true,
+      index: true,
+    },
+
     shortId: {
       type: String,
       required: true,

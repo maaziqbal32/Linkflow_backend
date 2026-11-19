@@ -15,6 +15,16 @@ async function handleGenerateNewShortURL(req, res) {
 
     let normalizedUrl = body.url.trim();
 
+    // Handle Markdown link input
+    const markdownMatch = normalizedUrl.match(
+      /^\[[^\]]+\]\((https?:\/\/[^)]+)\)$/i,
+    );
+
+    if (markdownMatch) {
+      normalizedUrl = markdownMatch[1];
+    }
+
+    // Add HTTPS automatically
     if (!/^https?:\/\//i.test(normalizedUrl)) {
       normalizedUrl = `https://${normalizedUrl}`;
     }
@@ -22,6 +32,7 @@ async function handleGenerateNewShortURL(req, res) {
     let parsedUrl;
 
     try {
+      // IMPORTANT: Use NodeURL, NOT URL
       parsedUrl = new NodeURL(normalizedUrl);
     } catch {
       return res.status(400).json({
@@ -38,13 +49,14 @@ async function handleGenerateNewShortURL(req, res) {
       !validHostname
     ) {
       return res.status(400).json({
-        error: "Please enter a valid domain, such as google.com",
+        error: "Please enter a valid domain",
       });
     }
 
     const shortID = nanoid(8);
 
     await URL.create({
+      userId: req.user.userId,
       shortId: shortID,
       redirectUrl: parsedUrl.toString(),
       visitHistory: [],
@@ -62,15 +74,15 @@ async function handleGenerateNewShortURL(req, res) {
     });
   }
 }
-
 // Get analytics for an individual short URL
 async function handleGetAnalytics(req, res) {
   try {
     const { shortId } = req.params;
 
-    const result = await URL.findOne({ shortId }).select(
-      "shortId redirectUrl visitHistory",
-    );
+    const result = await URL.findOne({
+      shortId,
+      userId: req.user.userId,
+    }).select("shortId redirectUrl visitHistory");
 
     if (!result) {
       return res.status(404).json({
@@ -78,13 +90,11 @@ async function handleGetAnalytics(req, res) {
       });
     }
 
-    const analytics = result.visitHistory || [];
-
     return res.status(200).json({
       shortId: result.shortId,
       redirectUrl: result.redirectUrl,
-      totalClicks: analytics.length,
-      analytics,
+      totalClicks: result.visitHistory.length,
+      analytics: result.visitHistory,
     });
   } catch (error) {
     console.error("Analytics error:", error);
@@ -98,11 +108,13 @@ async function handleGetAnalytics(req, res) {
 // Get all shortened URLs
 async function handleGetAllURLs(req, res) {
   try {
-    const urls = await URL.find().sort({ createdAt: -1 });
+    const urls = await URL.find({
+      userId: req.user.userId,
+    }).sort({ createdAt: -1 });
 
     return res.status(200).json(urls);
   } catch (error) {
-    console.error("Error fetching URLs:", error);
+    console.error("Get URLs error:", error);
 
     return res.status(500).json({
       error: "Failed to fetch URLs",
@@ -115,7 +127,10 @@ async function handleDeleteURL(req, res) {
   try {
     const { shortId } = req.params;
 
-    const deletedURL = await URL.findOneAndDelete({ shortId });
+    const deletedURL = await URL.findOneAndDelete({
+      shortId,
+      userId: req.user.userId,
+    });
 
     if (!deletedURL) {
       return res.status(404).json({
@@ -143,17 +158,17 @@ async function handleUpdateURLStatus(req, res) {
 
     if (!["active", "inactive"].includes(status)) {
       return res.status(400).json({
-        error: "Status must be active or inactive",
+        error: "Invalid status",
       });
     }
 
     const updatedURL = await URL.findOneAndUpdate(
-      { shortId },
-      { $set: { status } },
       {
-        new: true,
-        runValidators: true,
+        shortId,
+        userId: req.user.userId,
       },
+      { $set: { status } },
+      { new: true, runValidators: true },
     );
 
     if (!updatedURL) {
@@ -163,15 +178,15 @@ async function handleUpdateURLStatus(req, res) {
     }
 
     return res.status(200).json({
-      message: "URL status updated successfully",
+      message: "Status updated successfully",
       shortId: updatedURL.shortId,
       status: updatedURL.status,
     });
   } catch (error) {
-    console.error("Update URL status error:", error);
+    console.error("Status update error:", error);
 
     return res.status(500).json({
-      error: "Failed to update URL status",
+      error: "Failed to update status",
     });
   }
 }
