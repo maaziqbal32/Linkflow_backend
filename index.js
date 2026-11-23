@@ -55,6 +55,11 @@ app.use(
 
 app.use(express.json());
 app.use(cookieParser());
+app.get("/", (req, res) => {
+  res.status(200).json({
+    message: "Linkflow Backend is running",
+  });
+});
 
 // Connect to MongoDB before handling API requests
 app.use(async (req, res, next) => {
