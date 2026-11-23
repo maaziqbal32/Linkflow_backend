@@ -13,7 +13,14 @@ const app = express();
 
 const PORT = process.env.PORT || 8001;
 const MONGO_URI =
-  process.env.MONGO_URI || "mongodb://127.0.0.1:27017/short-url";
+  process.env.MONGO_URI ||
+  (process.env.NODE_ENV !== "production"
+    ? "mongodb://127.0.0.1:27017/short-url"
+    : undefined);
+
+if (!MONGO_URI) {
+  throw new Error("MONGO_URI is missing");
+}
 
 if (!process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET is missing from backend/.env");
@@ -21,7 +28,7 @@ if (!process.env.JWT_SECRET) {
 
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
     credentials: true,
   }),
 );
