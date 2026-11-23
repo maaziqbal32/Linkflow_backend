@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -12,6 +13,7 @@ const URL = require("./models/url");
 const app = express();
 
 const PORT = process.env.PORT || 8001;
+
 const MONGO_URI =
   process.env.MONGO_URI ||
   (process.env.NODE_ENV !== "production"
@@ -23,7 +25,25 @@ if (!MONGO_URI) {
 }
 
 if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is missing from backend/.env");
+  throw new Error("JWT_SECRET is missing");
+}
+
+// MongoDB connection cache
+let mongoConnectionPromise;
+
+async function ensureMongoConnection() {
+  if (!mongoConnectionPromise) {
+    mongoConnectionPromise = connectToMongoDB(MONGO_URI)
+      .then(() => {
+        console.log("Connection to MongoDB successful.");
+      })
+      .catch((error) => {
+        mongoConnectionPromise = null;
+        throw error;
+      });
+  }
+
+  return mongoConnectionPromise;
 }
 
 app.use(
@@ -36,6 +56,20 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
+// Connect to MongoDB before handling API requests
+app.use(async (req, res, next) => {
+  try {
+    await ensureMongoConnection();
+    next();
+  } catch (error) {
+    console.error("MongoDB connection failed:", error);
+
+    return res.status(503).json({
+      error: "Database connection unavailable",
+    });
+  }
+});
+
 app.use("/auth", authRoute);
 app.use("/url", urlRoute);
 
@@ -44,13 +78,15 @@ app.get("/:shortID", async (req, res) => {
   try {
     const { shortID } = req.params;
 
-    // Browser ko cache karne se rokne ke liye
-    res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, private",
+    );
 
     const entry = await URL.findOneAndUpdate(
       {
         shortId: shortID,
-        status: "active", // Seedha active check karna zyada clean hai
+        status: "active",
       },
       {
         $push: {
@@ -59,16 +95,19 @@ app.get("/:shortID", async (req, res) => {
           },
         },
       },
-      {   returnDocument: "after", },
+      { returnDocument: "after" },
     );
 
     if (!entry) {
       const exists = await URL.exists({ shortId: shortID });
 
-      // 410 ki jagah 403 use karein taake Chrome permanently cache na kare
       return res
         .status(exists ? 403 : 404)
-        .send(exists ? "This short URL is inactive" : "Short URL not found");
+        .send(
+          exists
+            ? "This short URL is inactive"
+            : "Short URL not found",
+        );
     }
 
     return res.redirect(302, entry.redirectUrl);
@@ -78,16 +117,12 @@ app.get("/:shortID", async (req, res) => {
   }
 });
 
-
-connectToMongoDB(MONGO_URI)
-  .then(() => {
-    console.log("Connection to MongoDB successful.");
-
-    app.listen(PORT, () => {
-      console.log(`Server started at port ${PORT}`);
-    });
-  })
-  .catch((error) => {
-    console.error("MongoDB connection failed:", error);
-    process.exit(1);
+// Local development only
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server started at port ${PORT}`);
   });
+}
+
+// Export Express app for Vercel
+module.exports = app;
